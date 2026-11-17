@@ -1,21 +1,21 @@
 "use strict";
 
-const http = require("http");
-const https = require("https");
-const express = require("express");
-const { Client, GatewayIntentBits } = require("discord.js");
+// index.js contains the HTTP listener and keep-alive loop; expose its
+// dependencies before loading the ticket extension so it can start cleanly.
+global.http = require("http");
+global.https = require("https");
+global.PORT = Number(process.env.PORT) || 3000;
+global.app = require("express")();
 
-const PORT = Number(process.env.PORT) || 3000;
-const app = express();
-
-app.disable("x-powered-by");
-app.get("/", (_req, res) => {
+global.app.disable("x-powered-by");
+global.app.get("/", (_req, res) => {
   res.status(200).json({ status: "ok", service: "jayce-tickets" });
 });
-app.get("/health", (_req, res) => {
+global.app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
+const { Client, GatewayIntentBits } = require("discord.js");
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once("ready", (readyClient) => {
@@ -34,25 +34,6 @@ if (!process.env.DISCORD_TOKEN) {
   });
 }
 
-// Load the ticket interaction extension after the Discord client is created.
+// This module patches the Discord client and starts the HTTP/keep-alive
+// services. Do not start another listener here or it will bind twice.
 require("./index.js");
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[EXPRESS] Listening on port ${PORT}`);
-
-  const keepAliveUrl = process.env.RENDER_EXTERNAL_URL;
-  if (!keepAliveUrl) return;
-
-  const interval = setInterval(() => {
-    const transport = keepAliveUrl.startsWith("https") ? https : http;
-    transport
-      .get(keepAliveUrl, { timeout: 5000 }, (response) => {
-        response.resume();
-      })
-      .on("error", (error) => {
-        console.log(`[KEEP-ALIVE] Ping failed: ${error.message}`);
-      });
-  }, 5 * 60 * 1000);
-
-  interval.unref();
-});
