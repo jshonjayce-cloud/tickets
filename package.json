@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node -r ./ticket-system.js server.js"
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "discord.js": "^14.18.0",
