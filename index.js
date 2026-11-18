@@ -38,14 +38,18 @@ function getOwnerId(channel) {
   return match ? match[1] : null;
 }
 
+// Discord interaction members can expose roles as a cache or as an array of IDs.
 function isStaff(interaction) {
-  return Boolean(interaction.member?.roles?.cache?.has(STAFF_ROLE_ID));
+  const roles = interaction.member?.roles;
+  const hasStaffRole = Array.isArray(roles)
+    ? roles.includes(STAFF_ROLE_ID)
+    : Boolean(roles?.cache?.has(STAFF_ROLE_ID));
+  return hasStaffRole || Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.Administrator));
 }
 
 async function handleTicketInteraction(interaction) {
   if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu() && !interaction.isButton()) return false;
 
-  // This is a real top-level /setticketpanel command registered by server.js.
   if (interaction.isChatInputCommand() && interaction.commandName === "setticketpanel") {
     if (!interaction.inGuild()) {
       await interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
@@ -79,12 +83,12 @@ async function handleTicketInteraction(interaction) {
     const guild = interaction.guild;
     const category = await guild.channels.fetch(CATEGORY_ID).catch(() => null);
     if (!category || category.type !== ChannelType.GuildCategory) {
-      await interaction.reply({ content: "The configured ticket category was not found. Please contact staff.", flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: `Ticket category ${CATEGORY_ID} was not found or is not a category.`, flags: MessageFlags.Ephemeral });
       return true;
     }
     const staffRole = await guild.roles.fetch(STAFF_ROLE_ID).catch(() => null);
     if (!staffRole) {
-      await interaction.reply({ content: "The configured support role was not found. Please contact staff.", flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: `Support role ${STAFF_ROLE_ID} was not found in this server.`, flags: MessageFlags.Ephemeral });
       return true;
     }
 
@@ -163,8 +167,12 @@ Client.prototype.emit = function (eventName, ...args) {
     if (isPanelCommand || isTicketComponent) {
       handleTicketInteraction(interaction).catch(async (error) => {
         console.error("[TICKETS] Interaction failed:", error);
+        const detail = error?.code ? ` (Discord error ${error.code})` : "";
         try {
-          const payload = { content: "Ticket action failed. Please contact support staff.", flags: MessageFlags.Ephemeral };
+          const payload = {
+            content: `Ticket action failed${detail}: ${error?.message || "unknown error"}. Check that the bot has Manage Channels permission and can access the ticket category.`,
+            flags: MessageFlags.Ephemeral
+          };
           if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
           else await interaction.reply(payload);
         } catch (_) {}
