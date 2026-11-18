@@ -1,7 +1,6 @@
-// Adds the ticket panel command and ticket workflow to the Discord client.
+// Adds the ticket-panel slash command handler and private ticket workflow.
 const {
   Client,
-  SlashCommandBuilder,
   ChannelType,
   PermissionFlagsBits,
   EmbedBuilder,
@@ -21,27 +20,6 @@ const TICKET_TYPES = [
   { name: "Key / HWID", value: "key-hwid", description: "Open a Key / HWID support ticket" },
   { name: "Bug Report", value: "bug-report", description: "Open a Bug Report support ticket" }
 ];
-
-// Inject /jayce setticketpanel <channel> into the existing command payload.
-const originalToJSON = SlashCommandBuilder.prototype.toJSON;
-SlashCommandBuilder.prototype.toJSON = function (...args) {
-  const data = originalToJSON.apply(this, args);
-  if (data.name === "jayce" && Array.isArray(data.options) && !data.options.some((option) => option.name === "setticketpanel")) {
-    data.options.push({
-      type: 1,
-      name: "setticketpanel",
-      description: "Send the support ticket panel to a selected channel",
-      options: [{
-        type: 7,
-        name: "channel",
-        description: "Text channel where the ticket panel should be posted",
-        required: true,
-        channel_types: [ChannelType.GuildText]
-      }]
-    });
-  }
-  return data;
-};
 
 function ticketPanelPayload() {
   const embed = new EmbedBuilder()
@@ -67,7 +45,8 @@ function isStaff(interaction) {
 async function handleTicketInteraction(interaction) {
   if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu() && !interaction.isButton()) return false;
 
-  if (interaction.isChatInputCommand() && interaction.commandName === "jayce" && interaction.options.getSubcommand(false) === "setticketpanel") {
+  // This is a real top-level /setticketpanel command registered by server.js.
+  if (interaction.isChatInputCommand() && interaction.commandName === "setticketpanel") {
     if (!interaction.inGuild()) {
       await interaction.reply({ content: "This command can only be used in a server.", flags: MessageFlags.Ephemeral });
       return true;
@@ -173,16 +152,15 @@ async function handleTicketInteraction(interaction) {
   return false;
 }
 
-// Intercept ticket interactions so the existing command handler cannot double-respond.
+// Consume only ticket interactions, leaving unrelated bot interactions untouched.
 const originalEmit = Client.prototype.emit;
 Client.prototype.emit = function (eventName, ...args) {
   if (eventName === "interactionCreate" && args[0]) {
     const interaction = args[0];
-    const isTicketPanelCommand = interaction.isChatInputCommand?.() &&
-      interaction.commandName === "jayce" && interaction.options.getSubcommand(false) === "setticketpanel";
+    const isPanelCommand = interaction.isChatInputCommand?.() && interaction.commandName === "setticketpanel";
     const isTicketComponent = (interaction.isStringSelectMenu?.() && interaction.customId === "jayce_ticket:create") ||
       (interaction.isButton?.() && interaction.customId === "jayce_ticket:close");
-    if (isTicketPanelCommand || isTicketComponent) {
+    if (isPanelCommand || isTicketComponent) {
       handleTicketInteraction(interaction).catch(async (error) => {
         console.error("[TICKETS] Interaction failed:", error);
         try {
