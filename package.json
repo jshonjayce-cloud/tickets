@@ -1,16 +1,9 @@
 {
   "name": "jayce",
-  "description": "xo",
-  "version": "1.0.0",
+  "description": "jayce.EXE ticket and support bot",
+  "version": "1.1.0",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "discord.js": "^14.18.0",
-    "express": "^4.21.0"
-  }
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "discord.js": "^14.18.0", "express": "^4.21.0" }
 }
