@@ -93,7 +93,8 @@ async function handleTicketInteraction(interaction) {
     }
 
     const channels = await guild.channels.fetch();
-    const existing = channels.find((channel) => channel.parentId === CATEGORY_ID && getOwnerId(channel) === interaction.user.id);
+    // Collection values can be null for deleted/unavailable channels; skip them.
+    const existing = channels.find((channel) => channel && channel.parentId === CATEGORY_ID && getOwnerId(channel) === interaction.user.id);
     if (existing) {
       await interaction.reply({ content: `You already have an open ticket: ${existing}.`, flags: MessageFlags.Ephemeral });
       return true;
