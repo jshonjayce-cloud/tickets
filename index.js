@@ -22,15 +22,15 @@ const TICKET_TYPES = [
 ];
 
 function ticketPanelPayload() {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle("Jayce Support Tickets")
-    .setDescription("Choose a category below to open a private support ticket. Only you and the support team can see it.");
   const menu = new StringSelectMenuBuilder()
     .setCustomId("jayce_ticket:create")
     .setPlaceholder("Choose a ticket category")
     .addOptions(TICKET_TYPES.map(({ name, value, description }) => ({ label: name, value, description })));
-  return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] };
+
+  return {
+    content: "# jayce.EXE\n**Choose a category to open a private ticket.**\nOnly you and the support team will be able to view the ticket.",
+    components: [new ActionRowBuilder().addComponents(menu)]
+  };
 }
 
 function getOwnerId(channel) {
@@ -38,7 +38,6 @@ function getOwnerId(channel) {
   return match ? match[1] : null;
 }
 
-// Discord interaction members can expose roles as a cache or as an array of IDs.
 function isStaff(interaction) {
   const roles = interaction.member?.roles;
   const hasStaffRole = Array.isArray(roles)
@@ -93,7 +92,6 @@ async function handleTicketInteraction(interaction) {
     }
 
     const channels = await guild.channels.fetch();
-    // Collection values can be null for deleted/unavailable channels; skip them.
     const existing = channels.find((channel) => channel && channel.parentId === CATEGORY_ID && getOwnerId(channel) === interaction.user.id);
     if (existing) {
       await interaction.reply({ content: `You already have an open ticket: ${existing}.`, flags: MessageFlags.Ephemeral });
@@ -125,9 +123,12 @@ async function handleTicketInteraction(interaction) {
       content: `${interaction.user} <@&${STAFF_ROLE_ID}>`,
       embeds: [new EmbedBuilder()
         .setColor(0x5865f2)
-        .setTitle(`${type.name} Support Ticket`)
-        .setDescription(`Hi ${interaction.user}! Please describe what you need help with. Support staff will be with you soon.`)
-        .addFields({ name: "Opened by", value: interaction.user.tag, inline: true })
+        .setTitle("jayce.EXE — Support")
+        .setDescription(`Please describe what you need help with. Support staff will be with you soon.`)
+        .addFields(
+          { name: "Ticket type", value: type.name, inline: true },
+          { name: "Opened by", value: interaction.user.tag, inline: true }
+        )
         .setTimestamp()],
       components: [closeRow],
       allowedMentions: { users: [interaction.user.id], roles: [STAFF_ROLE_ID] }
@@ -157,7 +158,6 @@ async function handleTicketInteraction(interaction) {
   return false;
 }
 
-// Consume only ticket interactions, leaving unrelated bot interactions untouched.
 const originalEmit = Client.prototype.emit;
 Client.prototype.emit = function (eventName, ...args) {
   if (eventName === "interactionCreate" && args[0]) {
