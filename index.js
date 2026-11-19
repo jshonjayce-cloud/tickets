@@ -18,10 +18,28 @@ const TICKET_TYPES = [
   { name: "Key / HWID", value: "key-hwid", description: "Open a Key / HWID support ticket" },
   { name: "Bug Report", value: "bug-report", description: "Open a Bug Report support ticket" }
 ];
-const blankStore = () => ({ bans: {}, tickets: {}, warnings: {}, bugs: {}, features: {}, components: {}, customerFlags: {}, customerNotes: {}, autoReplies: {}, status: "Operational", executors: "Unknown" });
+
+const DEFAULT_EXECUTORS = [
+  ["Athena", "1.0.4", "updated"], ["Axis", "0.5.7-fc966", "updated"], ["Delta", "2.729.840", "updated"],
+  ["DX9WARE V2", "1.1.229", "updated"], ["Lucid", "1.0.4", "updated"], ["Lumen", "1.0.9", "updated"],
+  ["Madium", "2.9.6", "updated"], ["Matcha", "v2", "updated"], ["Matrix Hub", "v3", "updated"],
+  ["Photon", "7.1", "updated"], ["Potassium", "2.7.0", "updated"], ["Real", "3.2.2", "updated"],
+  ["Serotonin", "v2", "updated"], ["SirHurt", "V5.481", "updated"], ["Solara", "0.1.9a", "updated"],
+  ["Velocity", "1.6.4", "updated"], ["Volcano", "v3.2.11.5", "updated"], ["Volt", "1.3.22.2", "updated"],
+  ["Wave", "NEW-1.6.3", "updated"], ["Xeno", "1.3.65", "updated"], ["Delta", "2.729.838", "outdated"],
+  ["Isaeva", "2.6.10", "outdated"], ["Lynx", "0.747", "outdated"], ["MacSploit", "747.1", "outdated"],
+  ["Madius", "1.11.10-beta", "outdated"], ["Opiumware", "v2.6.0-hotf", "outdated"], ["Severe", "v2", "outdated"],
+  ["Synapse Z", "1.0.4.0", "outdated"], ["Vega X", "2.734.917", "outdated"]
+];
+
+const blankStore = () => ({ bans: {}, tickets: {}, warnings: {}, bugs: {}, features: {}, components: {}, customerFlags: {}, customerNotes: {}, autoReplies: {}, status: "Operational", executors: {} });
 let store;
 function loadStore() {
-  try { store = { ...blankStore(), ...JSON.parse(fs.readFileSync(STORE_PATH, "utf8")) }; }
+  try {
+    const loaded = JSON.parse(fs.readFileSync(STORE_PATH, "utf8"));
+    store = { ...blankStore(), ...loaded };
+    if (typeof store.executors !== "object" || store.executors === null || Array.isArray(store.executors)) store.executors = {};
+  }
   catch (error) {
     if (error.code !== "ENOENT") console.error("[DATA] Could not read ticket data:", error);
     store = blankStore();
@@ -35,6 +53,46 @@ function saveStore() {
 loadStore();
 const key = (guildId, id) => `${guildId}:${id}`;
 const now = () => new Date().toISOString();
+
+function executorKey(guildId, name) { return key(guildId, name.trim().toLowerCase()); }
+
+function ensureDefaultExecutors(guildId) {
+  const guildKey = key(guildId, "registry");
+  if (!store.executors[guildKey]) {
+    store.executors[guildKey] = {};
+    for (const [name, version, status] of DEFAULT_EXECUTORS) {
+      const entryKey = executorKey(guildId, name);
+      store.executors[guildKey][entryKey] = { name, version, status };
+    }
+  }
+}
+
+function getExecutorEntries(guildId, filter) {
+  ensureDefaultExecutors(guildId);
+  const entries = Object.values(store.executors[key(guildId, "registry")] || {});
+  return entries
+    .filter((entry) => !filter || entry.status === filter)
+    .sort((a, b) => a.name.localeCompare(b.name) || a.status.localeCompare(b.status));
+}
+
+function executorEmbed(guildId, filter) {
+  const entries = getExecutorEntries(guildId, filter);
+  const updated = entries.filter((entry) => entry.status === "updated");
+  const outdated = entries.filter((entry) => entry.status === "outdated");
+
+  const formatList = (items) => items.length
+    ? items.map((entry) => `●  ${entry.name.padEnd(15).slice(0, 15)} ${entry.version.padEnd(12).slice(0, 12)} ${entry.status}`).join("\n")
+    : "No executors found.";
+
+  const embed = new EmbedBuilder()
+    .setTitle("Executor Status")
+    .setColor(filter === "outdated" ? 0xed4245 : filter === "updated" ? 0x57f287 : 0x5865f2)
+    .setDescription("```\n" + formatList(filter ? entries : [...updated, ...outdated]) + "\n```")
+    .setFooter({ text: `${entries.length} executor${entries.length === 1 ? "" : "s"}` });
+
+  return embed;
+}
+
 function isStaff(i) {
   const roles = i.member?.roles;
   return (Array.isArray(roles) ? roles.includes(STAFF_ROLE_ID) : Boolean(roles?.cache?.has(STAFF_ROLE_ID))) || Boolean(i.memberPermissions?.has(PermissionFlagsBits.Administrator));
@@ -118,7 +176,7 @@ async function handle(i) {
   if (!i.isChatInputCommand()) return;
   const command = i.commandName;
   if (staffCommands.has(command) && !isStaff(i)) return i.reply({ content: "You need the support staff role or Administrator permission.", flags: MessageFlags.Ephemeral });
-  const sub = ["ticket", "mod", "bug", "feature", "core"].includes(command) ? i.options.getSubcommand() : null;
+  const sub = ["ticket", "mod", "bug", "feature", "core", "executors"].includes(command) ? i.options.getSubcommand() : null;
   if (command === "setticketpanel") {
     const ch = i.options.getChannel("channel"); await ch.send(panelPayload()); return i.reply({ content: `Ticket panel posted in ${ch}.`, flags: MessageFlags.Ephemeral });
   }
@@ -131,12 +189,42 @@ async function handle(i) {
     const staffCount = g.members.cache.filter((m) => m.roles.cache.has(STAFF_ROLE_ID)).size;
     return i.reply({ embeds: [new EmbedBuilder().setTitle(command === "staff" ? "jayce.EXE Staff Dashboard" : "Server Statistics").addFields({ name: "Members", value: String(g.memberCount), inline: true }, { name: "Channels", value: String(g.channels.cache.size), inline: true }, { name: "Open tickets", value: String(open), inline: true }, { name: "Staff online/cache", value: String(staffCount), inline: true }, { name: "Product status", value: store.status, inline: true })], flags: MessageFlags.Ephemeral });
   }
-  if (command === "status") return i.reply(`**jayce.EXE status:** ${store.status}\n**Executors:** ${store.executors}`);
+  if (command === "status") {
+    const entries = getExecutorEntries(i.guildId);
+    const updated = entries.filter((entry) => entry.status === "updated").length;
+    const outdated = entries.filter((entry) => entry.status === "outdated").length;
+    return i.reply(`**jayce.EXE status:** ${store.status}\n**Executors:** ${updated} updated, ${outdated} outdated`);
+  }
   if (command === "customer" || (command === "core" && sub === "customer")) {
     const u = i.options.getUser("user"); const k = key(i.guildId, u.id);
-    return i.reply({ content: `Customer: ${u.tag || u.username}\nFlags: ${(store.customerFlags[k] || []).join(", ") || "None"}\nNotes: ${(store.customerNotes[k] || []).map((n) => n.text).join(" | ") || "None"}`, flags: command === "customer" ? MessageFlags.Ephemeral : MessageFlags.Ephemeral });
+    return i.reply({ content: `Customer: ${u.tag || u.username}\nFlags: ${(store.customerFlags[k] || []).join(", ") || "None"}\nNotes: ${(store.customerNotes[k] || []).map((n) => n.text).join(" | ") || "None"}`, flags: MessageFlags.Ephemeral });
   }
-  if (command === "executors") { if (i.options.getString("status")) { store.executors = i.options.getString("status"); saveStore(); } return i.reply(`Executor status: ${store.executors}`); }
+  if (command === "executors") {
+    ensureDefaultExecutors(i.guildId);
+    if (sub === "view") {
+      const filter = i.options.getString("filter") || null;
+      return i.reply({ embeds: [executorEmbed(i.guildId, filter)] });
+    }
+    if (sub === "set") {
+      const name = i.options.getString("name").trim();
+      const version = i.options.getString("version").trim();
+      const status = i.options.getString("status");
+      const guildKey = key(i.guildId, "registry");
+      const entryKey = executorKey(i.guildId, name);
+      store.executors[guildKey][entryKey] = { name, version, status };
+      saveStore();
+      return i.reply({ embeds: [executorEmbed(i.guildId, null)] });
+    }
+    if (sub === "remove") {
+      const name = i.options.getString("name").trim();
+      const guildKey = key(i.guildId, "registry");
+      const entryKey = executorKey(i.guildId, name);
+      if (!store.executors[guildKey][entryKey]) return i.reply({ content: `Executor **${name}** was not found.`, flags: MessageFlags.Ephemeral });
+      delete store.executors[guildKey][entryKey];
+      saveStore();
+      return i.reply({ content: `Executor **${name}** removed.`, embeds: [executorEmbed(i.guildId, null)] });
+    }
+  }
   if (command === "ticket") {
     const channel = i.options.getChannel("channel") || i.channel;
     if (["ban", "unban"].includes(sub)) {
