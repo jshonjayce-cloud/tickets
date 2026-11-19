@@ -63,8 +63,17 @@ core.addSubcommand((s) => s.setName("status").setDescription("Update overall pro
 core.addSubcommand((s) => s.setName("customer").setDescription("Look up stored customer notes and flags").addUserOption((o) => o.setName("user").setDescription("Customer").setRequired(true)));
 commands.push(core);
 
-const executors = new SlashCommandBuilder().setName("executors").setDescription("View or update executor service status")
-  .addStringOption((o) => o.setName("status").setDescription("Status (omit to view)").setRequired(false));
+const executors = new SlashCommandBuilder()
+  .setName("executors")
+  .setDescription("View or update executor service status")
+  .addSubcommand((s) => s.setName("view").setDescription("Show all executor versions and status")
+    .addStringOption((o) => o.setName("filter").setDescription("Filter by updated or outdated").setRequired(false).addChoices({ name: "Updated", value: "updated" }, { name: "Outdated", value: "outdated" })))
+  .addSubcommand((s) => s.setName("set").setDescription("Add or update an executor")
+    .addStringOption((o) => o.setName("name").setDescription("Executor name").setRequired(true))
+    .addStringOption((o) => o.setName("version").setDescription("Executor version").setRequired(true))
+    .addStringOption((o) => o.setName("status").setDescription("Executor status").setRequired(true).addChoices({ name: "Updated", value: "updated" }, { name: "Outdated", value: "outdated" })))
+  .addSubcommand((s) => s.setName("remove").setDescription("Remove an executor")
+    .addStringOption((o) => o.setName("name").setDescription("Executor name").setRequired(true)));
 commands.push(executors);
 
 module.exports = { commands: commands.map((command) => command.toJSON()), staffCommands };
