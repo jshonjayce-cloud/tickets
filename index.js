@@ -110,9 +110,30 @@ function ticketLog(channel, action, actor, extra = "") {
   saveStore();
 }
 function panelPayload() {
-  const menu = new StringSelectMenuBuilder().setCustomId("jayce_ticket:create").setPlaceholder("Choose a ticket category")
-    .addOptions(TICKET_TYPES.map((t) => ({ label: t.name, value: t.value, description: t.description })));
-  return { content: "# jayce.EXE\n**Choose a category to open a private ticket.**\nOnly you and the support team can view the ticket.", components: [new ActionRowBuilder().addComponents(menu)] };
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("jayce_ticket:create")
+    .setPlaceholder("Choose a cozy category")
+    .addOptions(TICKET_TYPES.map((t) => ({
+      label: t.name,
+      value: t.value,
+      description: t.description,
+      emoji: "☕"
+    })));
+
+  const embed = new EmbedBuilder()
+    .setTitle("🐸 Cozy Ticket Support")
+    .setDescription(
+      "Welcome to jayce.EXE support.\n\n" +
+      "Choose a category below to open a private ticket.\n" +
+      "Only you and the support team can view it."
+    )
+    .setColor(0x5865f2)
+    .setFooter({ text: "jayce.EXE • Ticket Support" });
+
+  return {
+    embeds: [embed],
+    components: [new ActionRowBuilder().addComponents(menu)]
+  };
 }
 function cleanName(value) { return value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 90) || "ticket"; }
 async function closeTicket(channel, actor, reason = "Ticket closed") {
