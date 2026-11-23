@@ -8,7 +8,7 @@ const {
 } = require("discord.js");
 const { staffCommands } = require("./commands");
 
-const CATEGORY_ID = "1572392852540100690";
+const CATEGORY_ID = "1574447894679916684";
 const STAFF_ROLE_ID = "1570780402363400262";
 const TICKET_PREFIX = "jayce-ticket:";
 const STORE_PATH = process.env.TICKET_DATA_FILE || path.join(process.cwd(), "ticket-data.json");
